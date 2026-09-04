@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: camcontrol
+      POSTGRES_PASSWORD: camcontrol_dev_pw
+      POSTGRES_DB: camcontrol
+    ports:
+      - "5432:5432"
+    volumes:
+      - camcontrol_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U camcontrol"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://camcontrol:camcontrol_dev_pw@db:5432/camcontrol
+    ports:
+      - "4000:4000"
+    volumes:
+      - camcontrol_qr_storage:/app/storage
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  camcontrol_db_data:
+  camcontrol_qr_storage:

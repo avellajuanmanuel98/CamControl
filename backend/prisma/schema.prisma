@@ -1,0 +1,230 @@
+// CamControl - Data model
+// See docs/ARCHITECTURE.md for the rationale behind each table.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN // full access: users, credentials, sites, cameras, import
+  OPERATOR // manage sites/cameras/QR, cannot manage users or EZVIZ credentials
+  VIEWER // read-only dashboard access
+}
+
+enum CameraStatus {
+  ONLINE
+  OFFLINE
+  WARNING // intermittent: flapped between online/offline recently
+  UNCONFIGURED // no monitoring source available yet (no EZVIZ serial / no credentials)
+}
+
+enum CheckSource {
+  EZVIZ_API
+  MANUAL
+  SYSTEM // e.g. status forced by import or admin action
+}
+
+enum AlertStatus {
+  PENDING
+  SENT
+  FAILED
+  ACKNOWLEDGED
+}
+
+enum AlertChannel {
+  NONE // channel not implemented yet, alert only visible in-app
+  EMAIL
+  WHATSAPP
+  TELEGRAM
+}
+
+enum ImportStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         UserRole @default(VIEWER)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  camerasCreated Camera[]      @relation("CameraCreatedBy")
+  qrUploads      QrAsset[]     @relation("QrUploadedBy")
+  importBatches  ImportBatch[]
+
+  @@map("users")
+}
+
+model Site {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String?  @unique
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cameras Camera[]
+
+  @@map("sites")
+}
+
+model Camera {
+  id           String  @id @default(uuid())
+  serialNumber String  @unique @map("serial_number") // S/N
+  code         String? @map("code") // CODIGO
+  cifrado      String? // CIFRADO column from the spreadsheet
+  capacidad    String? // CAPACIDAD (e.g. storage size / plan)
+  sharedUser   String? @map("shared_user") // User_Compartidos
+  model        String?
+  observations String?
+
+  // Network / identification (never rendered raw to the frontend for RTSP-like fields)
+  ipAddress String? @map("ip_address")
+  hostname  String?
+  port      Int?
+
+  // EZVIZ linkage
+  ezvizDeviceSerial   String? @map("ezviz_device_serial")
+  ezvizVerifiedFromQr Boolean @default(false) @map("ezviz_verified_from_qr")
+
+  siteId String @map("site_id")
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  status           CameraStatus @default(UNCONFIGURED)
+  lastCheckedAt    DateTime?    @map("last_checked_at")
+  lastOnlineAt     DateTime?    @map("last_online_at")
+  lastLatencyMs    Int?         @map("last_latency_ms")
+  consecutiveFails Int          @default(0) @map("consecutive_fails")
+
+  qrAsset   QrAsset? @relation(fields: [qrAssetId], references: [id], onDelete: SetNull)
+  qrAssetId String?  @unique @map("qr_asset_id")
+
+  createdById String? @map("created_by_id")
+  createdBy   User?   @relation("CameraCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  statusHistory CameraStatusEvent[]
+  alertEvents   AlertEvent[]
+
+  @@index([siteId])
+  @@index([status])
+  @@map("cameras")
+}
+
+model QrAsset {
+  id             String   @id @default(uuid())
+  filename       String
+  mimeType       String   @map("mime_type")
+  sizeBytes      Int      @map("size_bytes")
+  storagePath    String   @map("storage_path") // relative path under backend/storage
+  checksum       String
+  decodedPayload String?  @map("decoded_payload") // raw text decoded from the QR, if any
+  uploadedById   String?  @map("uploaded_by_id")
+  uploadedBy     User?    @relation("QrUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+
+  camera Camera?
+
+  @@map("qr_assets")
+}
+
+model CameraStatusEvent {
+  id          String       @id @default(uuid())
+  cameraId    String       @map("camera_id")
+  camera      Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  status      CameraStatus
+  source      CheckSource
+  latencyMs   Int?         @map("latency_ms")
+  message     String?
+  rawResponse Json?        @map("raw_response")
+  checkedAt   DateTime     @default(now()) @map("checked_at")
+
+  @@index([cameraId, checkedAt])
+  @@map("camera_status_events")
+}
+
+// Encrypted at rest: appKey/appSecret are stored as AES-256-GCM ciphertext,
+// never returned by the API. See src/utils/crypto.ts
+model EzvizCredential {
+  id                  String   @id @default(uuid())
+  label               String
+  appKeyCiphertext    String   @map("app_key_ciphertext")
+  appSecretCiphertext String   @map("app_secret_ciphertext")
+  active              Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("ezviz_credentials")
+}
+
+model AlertRule {
+  id               String   @id @default(uuid())
+  name             String
+  thresholdMinutes Int      @map("threshold_minutes") // e.g. alert after N minutes offline
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  alertEvents AlertEvent[]
+
+  @@map("alert_rules")
+}
+
+model AlertEvent {
+  id         String       @id @default(uuid())
+  cameraId   String       @map("camera_id")
+  camera     Camera       @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  ruleId     String?      @map("rule_id")
+  rule       AlertRule?   @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  message    String
+  channel    AlertChannel @default(NONE)
+  status     AlertStatus  @default(PENDING)
+  createdAt  DateTime     @default(now())
+  resolvedAt DateTime?    @map("resolved_at")
+
+  @@index([cameraId])
+  @@map("alert_events")
+}
+
+model ImportBatch {
+  id           String       @id @default(uuid())
+  filename     String
+  status       ImportStatus @default(PENDING)
+  totalRows    Int          @default(0) @map("total_rows")
+  createdRows  Int          @default(0) @map("created_rows")
+  updatedRows  Int          @default(0) @map("updated_rows")
+  skippedRows  Int          @default(0) @map("skipped_rows")
+  errorRows    Int          @default(0) @map("error_rows")
+  importedById String?      @map("imported_by_id")
+  importedBy   User?        @relation(fields: [importedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime     @default(now())
+
+  rowErrors ImportRowError[]
+
+  @@map("import_batches")
+}
+
+model ImportRowError {
+  id        String      @id @default(uuid())
+  batchId   String      @map("batch_id")
+  batch     ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  rowNumber Int         @map("row_number")
+  message   String
+  rawData   Json        @map("raw_data")
+
+  @@map("import_row_errors")
+}
