@@ -47,6 +47,55 @@ dashboardRouter.get(
 );
 
 /**
+ * Cameras currently down (OFFLINE or WARNING), oldest-online-first so the
+ * longest-running outage surfaces at the top of the "active incidents"
+ * panel — this is the "qué está fallando / desde cuándo" view.
+ */
+dashboardRouter.get(
+  "/incidents",
+  requireAuth,
+  asyncHandler(async (_req, res) => {
+    const incidents = await prisma.camera.findMany({
+      where: { status: { in: ["OFFLINE", "WARNING"] } },
+      select: {
+        id: true,
+        serialNumber: true,
+        code: true,
+        status: true,
+        lastOnlineAt: true,
+        lastCheckedAt: true,
+        consecutiveFails: true,
+        site: { select: { id: true, name: true } },
+      },
+      orderBy: [{ lastOnlineAt: "asc" }],
+      take: 25,
+    });
+    res.json(incidents);
+  })
+);
+
+/**
+ * Cross-camera feed of the latest status *transitions* (monitor.service
+ * only writes an event when the status actually changes, or when an
+ * operator forces a manual check), so this reads as real activity instead
+ * of a log flooded with repeated identical checks.
+ */
+dashboardRouter.get(
+  "/recent-events",
+  requireAuth,
+  asyncHandler(async (_req, res) => {
+    const events = await prisma.cameraStatusEvent.findMany({
+      orderBy: { checkedAt: "desc" },
+      take: 20,
+      include: {
+        camera: { select: { id: true, serialNumber: true, site: { select: { name: true } } } },
+      },
+    });
+    res.json(events);
+  })
+);
+
+/**
  * Server-Sent Events stream: pushes a fresh summary whenever any camera's
  * status changes, plus a periodic heartbeat/full-refresh so a client that
  * missed an event (or just connected) never stays stale for long.

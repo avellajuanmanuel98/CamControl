@@ -2,45 +2,68 @@
 import { computed } from "vue";
 import type { CameraStatus } from "../types";
 
-const props = defineProps<{ status: CameraStatus }>();
+const props = defineProps<{ status: CameraStatus; sub?: string }>();
 
+// Color alone never carries the meaning: each status also gets a distinct
+// shape (circle / square / triangle / dashed circle) so it reads correctly
+// for color-blind users and on a black & white printout. No badge/pill
+// background — just a colored glyph next to plain text, the way a status
+// column reads in Zabbix/PRTG/GitHub Actions rather than a UI-kit tag.
 const meta = computed(() => {
   switch (props.status) {
     case "ONLINE":
-      return { label: "ONLINE", dot: "🟢", color: "var(--online)" };
+      return { label: "Online", color: "var(--online)", shape: "circle" };
     case "OFFLINE":
-      return { label: "OFFLINE", dot: "🔴", color: "var(--offline)" };
+      return { label: "Offline", color: "var(--offline)", shape: "square" };
     case "WARNING":
-      return { label: "INTERMITENTE", dot: "🟡", color: "var(--warning)" };
+      return { label: "Intermitente", color: "var(--warning)", shape: "triangle" };
     default:
-      return { label: "SIN CONFIGURAR", dot: "⚪", color: "var(--unconfigured)" };
+      return { label: "Sin configurar", color: "var(--neutral)", shape: "dashed" };
   }
 });
 </script>
 
 <template>
-  <span class="badge" :style="{ '--c': meta.color }">
-    <span class="dot">{{ meta.dot }}</span>
-    {{ meta.label }}
+  <span class="status-wrap">
+    <span class="status">
+      <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" :style="{ color: meta.color }">
+        <circle v-if="meta.shape === 'circle'" cx="4" cy="4" r="4" fill="currentColor" />
+        <rect v-else-if="meta.shape === 'square'" width="8" height="8" fill="currentColor" />
+        <polygon v-else-if="meta.shape === 'triangle'" points="4,0 8,8 0,8" fill="currentColor" />
+        <circle
+          v-else
+          cx="4"
+          cy="4"
+          r="3.2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.4"
+          stroke-dasharray="2 1.6"
+        />
+      </svg>
+      <span class="status-label">{{ meta.label }}</span>
+    </span>
+    <span v-if="sub" class="status-sub dim">{{ sub }}</span>
   </span>
 </template>
 
 <style scoped>
-.badge {
+.status-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+.status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--c);
-  background: color-mix(in srgb, var(--c) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--c) 35%, transparent);
-  white-space: nowrap;
+  gap: 7px;
 }
-.dot {
-  font-size: 10px;
+.status-label {
+  font-size: 12.5px;
+  color: var(--text);
+}
+.status-sub {
+  font-size: 11px;
 }
 </style>

@@ -43,8 +43,8 @@ watch(() => [props.cameraId, props.hasQr], load);
 <style scoped>
 .qr-thumb {
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: white;
   cursor: pointer;
   overflow: hidden;
@@ -54,7 +54,8 @@ watch(() => [props.cameraId, props.hasQr], load);
   flex-shrink: 0;
 }
 .qr-thumb:disabled {
-  background: var(--bg-elevated);
+  background: var(--surface-2);
+  border-color: var(--border);
   cursor: default;
 }
 .qr-thumb img {
@@ -63,7 +64,7 @@ watch(() => [props.cameraId, props.hasQr], load);
   object-fit: cover;
 }
 .placeholder {
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 </style>

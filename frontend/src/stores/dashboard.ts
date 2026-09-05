@@ -1,13 +1,15 @@
 import { defineStore } from "pinia";
 import { api } from "../services/api";
 import { useAuthStore } from "./auth";
-import type { DashboardSummary } from "../types";
+import type { DashboardSummary, Incident, RecentEvent } from "../types";
 
 let eventSource: EventSource | null = null;
 
 export const useDashboardStore = defineStore("dashboard", {
   state: () => ({
     summary: null as DashboardSummary | null,
+    incidents: [] as Incident[],
+    recentEvents: [] as RecentEvent[],
     connected: false,
     lastUpdated: null as Date | null,
   }),
@@ -16,6 +18,14 @@ export const useDashboardStore = defineStore("dashboard", {
       const { data } = await api.get<DashboardSummary>("/dashboard/summary");
       this.summary = data;
       this.lastUpdated = new Date();
+    },
+    async fetchIncidentsAndActivity() {
+      const [incidents, events] = await Promise.all([
+        api.get<Incident[]>("/dashboard/incidents"),
+        api.get<RecentEvent[]>("/dashboard/recent-events"),
+      ]);
+      this.incidents = incidents.data;
+      this.recentEvents = events.data;
     },
     connectStream() {
       if (eventSource) return;
@@ -29,6 +39,12 @@ export const useDashboardStore = defineStore("dashboard", {
         this.summary = JSON.parse((event as MessageEvent).data);
         this.lastUpdated = new Date();
         this.connected = true;
+      });
+
+      // A camera changing state means the incidents list and activity feed
+      // are stale too — refresh them alongside the summary.
+      eventSource.addEventListener("camera", () => {
+        this.fetchIncidentsAndActivity().catch(() => {});
       });
 
       eventSource.onerror = () => {

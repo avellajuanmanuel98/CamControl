@@ -91,9 +91,10 @@ model Camera {
   observations String?
 
   // Network / identification (never rendered raw to the frontend for RTSP-like fields)
-  ipAddress String? @map("ip_address")
-  hostname  String?
-  port      Int?
+  ipAddress  String? @map("ip_address")
+  macAddress String? @map("mac_address")
+  hostname   String?
+  port       Int?
 
   // EZVIZ linkage
   ezvizDeviceSerial   String? @map("ezviz_device_serial")
@@ -103,6 +104,7 @@ model Camera {
   site   Site   @relation(fields: [siteId], references: [id], onDelete: Restrict)
 
   status           CameraStatus @default(UNCONFIGURED)
+  statusChangedAt  DateTime?    @map("status_changed_at") // last time `status` actually transitioned
   lastCheckedAt    DateTime?    @map("last_checked_at")
   lastOnlineAt     DateTime?    @map("last_online_at")
   lastLatencyMs    Int?         @map("last_latency_ms")

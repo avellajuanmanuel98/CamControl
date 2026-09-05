@@ -2,6 +2,8 @@
 import { useRoute } from "vue-router";
 import { useAuthStore } from "./stores/auth";
 import AppShell from "./components/AppShell.vue";
+import ToastStack from "./components/ToastStack.vue";
+import ConfirmDialog from "./components/ConfirmDialog.vue";
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -17,4 +19,7 @@ const auth = useAuthStore();
     </router-view>
   </AppShell>
   <router-view v-else />
+
+  <ToastStack />
+  <ConfirmDialog />
 </template>

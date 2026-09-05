@@ -33,6 +33,7 @@ const cameraSchema = z.object({
   model: z.string().optional().nullable(),
   observations: z.string().optional().nullable(),
   ipAddress: z.string().optional().nullable(),
+  macAddress: z.string().optional().nullable(),
   hostname: z.string().optional().nullable(),
   port: z.coerce.number().int().positive().optional().nullable(),
   ezvizDeviceSerial: z.string().optional().nullable(),
@@ -40,12 +41,24 @@ const cameraSchema = z.object({
   status: z.enum(["ONLINE", "OFFLINE", "WARNING", "UNCONFIGURED"]).optional(),
 });
 
+const SORTABLE_FIELDS = [
+  "serialNumber",
+  "status",
+  "site",
+  "lastCheckedAt",
+  "statusChangedAt",
+  "lastLatencyMs",
+  "updatedAt",
+] as const;
+
 const listQuerySchema = z.object({
   siteId: z.string().uuid().optional(),
   status: z.enum(["ONLINE", "OFFLINE", "WARNING", "UNCONFIGURED"]).optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
+  sortBy: z.enum(SORTABLE_FIELDS).default("updatedAt"),
+  sortDir: z.enum(["asc", "desc"]).default("desc"),
 });
 
 const cameraSummarySelect = {
@@ -58,13 +71,16 @@ const cameraSummarySelect = {
   model: true,
   observations: true,
   ipAddress: true,
+  macAddress: true,
   hostname: true,
   port: true,
   ezvizDeviceSerial: true,
   status: true,
+  statusChangedAt: true,
   lastCheckedAt: true,
   lastOnlineAt: true,
   lastLatencyMs: true,
+  consecutiveFails: true,
   siteId: true,
   createdAt: true,
   updatedAt: true,
@@ -91,11 +107,13 @@ camerasRouter.get(
         : {}),
     };
 
+    const orderBy = query.sortBy === "site" ? { site: { name: query.sortDir } } : { [query.sortBy]: query.sortDir };
+
     const [items, total] = await Promise.all([
       prisma.camera.findMany({
         where,
         select: cameraSummarySelect,
-        orderBy: { updatedAt: "desc" },
+        orderBy,
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
       }),
@@ -137,7 +155,7 @@ camerasRouter.post(
   asyncHandler(async (req, res) => {
     const data = cameraSchema.parse(req.body);
     const camera = await prisma.camera.create({
-      data: { ...data, createdById: req.user!.id },
+      data: { ...data, createdById: req.user!.id, statusChangedAt: new Date() },
       select: cameraSummarySelect,
     });
     res.status(201).json(camera);
@@ -149,10 +167,30 @@ camerasRouter.put(
   requireRole("ADMIN", "OPERATOR"),
   asyncHandler(async (req, res) => {
     const data = cameraSchema.partial().parse(req.body);
-    const camera = await prisma.camera
-      .update({ where: { id: req.params.id }, data, select: cameraSummarySelect })
-      .catch(() => null);
-    if (!camera) throw notFound("Cámara");
+    const existing = await prisma.camera.findUnique({ where: { id: req.params.id }, select: { status: true } });
+    if (!existing) throw notFound("Cámara");
+
+    // A manually forced status is still a real transition worth recording,
+    // so the activity feed and the camera's own history reflect it too.
+    const statusForced = data.status !== undefined && data.status !== existing.status;
+
+    const camera = await prisma.camera.update({
+      where: { id: req.params.id },
+      data: { ...data, ...(statusForced ? { statusChangedAt: new Date() } : {}) },
+      select: cameraSummarySelect,
+    });
+
+    if (statusForced) {
+      await prisma.cameraStatusEvent.create({
+        data: {
+          cameraId: camera.id,
+          status: camera.status,
+          source: "SYSTEM",
+          message: `Estado forzado manualmente por ${req.user!.name}`,
+        },
+      });
+    }
+
     res.json(camera);
   })
 );

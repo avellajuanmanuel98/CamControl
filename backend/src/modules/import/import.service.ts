@@ -174,7 +174,11 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
         continue;
       }
       if (!options.dryRun) {
-        await prisma.camera.update({ where: { id: existing.id }, data: payload });
+        const statusChanged = existing.status !== status;
+        await prisma.camera.update({
+          where: { id: existing.id },
+          data: { ...payload, ...(statusChanged ? { statusChangedAt: new Date() } : {}) },
+        });
       }
       outcomes.push({ rowNumber: row.rowNumber, action: "update", serialNumber, siteName });
       updated++;
@@ -182,7 +186,7 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
     }
 
     if (!options.dryRun) {
-      await prisma.camera.create({ data: payload });
+      await prisma.camera.create({ data: { ...payload, statusChangedAt: new Date() } });
     }
     outcomes.push({ rowNumber: row.rowNumber, action: "create", serialNumber, siteName });
     created++;

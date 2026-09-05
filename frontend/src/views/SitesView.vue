@@ -3,13 +3,17 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { api, apiErrorMessage } from "../services/api";
 import { useAuthStore } from "../stores/auth";
+import { useToastStore } from "../stores/toast";
+import { useConfirmStore } from "../stores/confirm";
+import Icon from "../components/Icon.vue";
 import type { Site } from "../types";
 
 const sites = ref<Site[]>([]);
 const loading = ref(true);
-const error = ref("");
 const auth = useAuthStore();
 const router = useRouter();
+const toast = useToastStore();
+const confirmDialog = useConfirmStore();
 
 const showForm = ref(false);
 const editing = ref<Site | null>(null);
@@ -19,12 +23,11 @@ const formError = ref("");
 
 async function load() {
   loading.value = true;
-  error.value = "";
   try {
     const { data } = await api.get<Site[]>("/sites");
     sites.value = data;
   } catch (err) {
-    error.value = apiErrorMessage(err);
+    toast.error(apiErrorMessage(err));
   } finally {
     loading.value = false;
   }
@@ -48,11 +51,18 @@ async function save() {
   saving.value = true;
   formError.value = "";
   try {
-    const payload = { ...form.value, code: form.value.code || null, address: form.value.address || null, notes: form.value.notes || null };
+    const payload = {
+      ...form.value,
+      code: form.value.code || null,
+      address: form.value.address || null,
+      notes: form.value.notes || null,
+    };
     if (editing.value) {
       await api.put(`/sites/${editing.value.id}`, payload);
+      toast.success("Sede actualizada");
     } else {
       await api.post("/sites", payload);
+      toast.success("Sede creada");
     }
     showForm.value = false;
     await load();
@@ -64,12 +74,19 @@ async function save() {
 }
 
 async function remove(site: Site) {
-  if (!confirm(`¿Eliminar la sede "${site.name}"? Esta acción no se puede deshacer.`)) return;
+  const ok = await confirmDialog.ask({
+    title: "Eliminar sede",
+    message: `¿Eliminar "${site.name}"? Solo es posible si no tiene cámaras asociadas.`,
+    confirmLabel: "Eliminar",
+    danger: true,
+  });
+  if (!ok) return;
   try {
     await api.delete(`/sites/${site.id}`);
+    toast.success("Sede eliminada");
     await load();
   } catch (err) {
-    alert(apiErrorMessage(err));
+    toast.error(apiErrorMessage(err));
   }
 }
 
@@ -85,58 +102,80 @@ onMounted(load);
     <div class="page-header">
       <div>
         <h1>Sedes</h1>
-        <p class="muted">Gestión de sedes/ubicaciones y sus estadísticas de cámaras</p>
+        <p class="subtitle">Gestión de sedes/ubicaciones y sus estadísticas de cámaras</p>
       </div>
-      <button v-if="auth.canManage" class="btn btn-primary" @click="openCreate">+ Nueva sede</button>
+      <button v-if="auth.canManage" class="btn btn-primary" @click="openCreate">
+        <Icon name="plus" :size="14" /> Nueva sede
+      </button>
     </div>
 
-    <p v-if="error" class="error muted">{{ error }}</p>
-    <p v-else-if="loading" class="muted">Cargando...</p>
+    <p v-if="loading" class="dim">Cargando…</p>
 
-    <div v-else class="sites-grid">
-      <div v-for="site in sites" :key="site.id" class="card site-card">
-        <div class="site-head">
-          <h3 @click="viewCameras(site)">{{ site.name }}</h3>
-          <div v-if="auth.canManage" class="actions">
-            <button class="icon-btn" title="Editar" @click="openEdit(site)">✏️</button>
-            <button class="icon-btn" title="Eliminar" @click="remove(site)">🗑️</button>
-          </div>
-        </div>
-        <p v-if="site.address" class="muted address">{{ site.address }}</p>
-        <div class="stats-row" v-if="site.stats">
-          <span class="stat"><strong>{{ site.stats.total }}</strong> total</span>
-          <span class="stat online">🟢 {{ site.stats.online }}</span>
-          <span class="stat offline">🔴 {{ site.stats.offline }}</span>
-          <span class="stat warning">🟡 {{ site.stats.warning }}</span>
-        </div>
-        <button class="btn view-btn" @click="viewCameras(site)">Ver cámaras →</button>
+    <div v-else class="panel">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Sede</th>
+              <th>Dirección</th>
+              <th class="num">Total</th>
+              <th class="num">Online</th>
+              <th class="num">Offline</th>
+              <th class="num">Intermitente</th>
+              <th class="num">Sin config.</th>
+              <th v-if="auth.canManage">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="site in sites" :key="site.id">
+              <td class="clickable" @click="viewCameras(site)"><strong>{{ site.name }}</strong></td>
+              <td class="dim">{{ site.address || "—" }}</td>
+              <td class="num">{{ site.stats?.total ?? 0 }}</td>
+              <td class="num" :style="{ color: site.stats?.online ? 'var(--online)' : undefined }">{{ site.stats?.online ?? 0 }}</td>
+              <td class="num" :style="{ color: site.stats?.offline ? 'var(--offline)' : undefined }">{{ site.stats?.offline ?? 0 }}</td>
+              <td class="num" :style="{ color: site.stats?.warning ? 'var(--warning)' : undefined }">{{ site.stats?.warning ?? 0 }}</td>
+              <td class="num dim">{{ site.stats?.unconfigured ?? 0 }}</td>
+              <td v-if="auth.canManage" class="actions-cell">
+                <button class="icon-btn" title="Editar" @click="openEdit(site)"><Icon name="edit" :size="14" /></button>
+                <button class="icon-btn danger" title="Eliminar" @click="remove(site)"><Icon name="trash" :size="14" /></button>
+              </td>
+            </tr>
+            <tr v-if="sites.length === 0">
+              <td :colspan="auth.canManage ? 8 : 7" class="empty-state">No hay sedes registradas.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <p v-if="sites.length === 0" class="muted">No hay sedes registradas.</p>
     </div>
 
     <div v-if="showForm" class="modal-backdrop" @click.self="showForm = false">
-      <form class="card modal" @submit.prevent="save">
-        <h3>{{ editing ? "Editar sede" : "Nueva sede" }}</h3>
-        <div class="form-field">
-          <label>Nombre *</label>
-          <input v-model="form.name" required placeholder="Ej. Medellín" />
+      <form class="modal" style="max-width: 380px" @submit.prevent="save">
+        <div class="modal-header">
+          <h3>{{ editing ? "Editar sede" : "Nueva sede" }}</h3>
+          <button type="button" class="icon-btn" @click="showForm = false"><Icon name="close" :size="14" /></button>
         </div>
-        <div class="form-field">
-          <label>Código</label>
-          <input v-model="form.code" placeholder="Opcional" />
+        <div class="modal-body">
+          <div class="field">
+            <label>Nombre *</label>
+            <input v-model="form.name" required placeholder="Ej. Medellín" />
+          </div>
+          <div class="field">
+            <label>Código</label>
+            <input v-model="form.code" placeholder="Opcional" />
+          </div>
+          <div class="field">
+            <label>Dirección</label>
+            <input v-model="form.address" placeholder="Opcional" />
+          </div>
+          <div class="field" style="margin-bottom: 0">
+            <label>Notas</label>
+            <textarea v-model="form.notes" rows="2" />
+          </div>
+          <p v-if="formError" class="error">{{ formError }}</p>
         </div>
-        <div class="form-field">
-          <label>Dirección</label>
-          <input v-model="form.address" placeholder="Opcional" />
-        </div>
-        <div class="form-field">
-          <label>Notas</label>
-          <textarea v-model="form.notes" rows="2" />
-        </div>
-        <p v-if="formError" class="error">{{ formError }}</p>
         <div class="modal-actions">
           <button type="button" class="btn" @click="showForm = false">Cancelar</button>
-          <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? "Guardando..." : "Guardar" }}</button>
+          <button type="submit" class="btn btn-primary" :disabled="saving">{{ saving ? "Guardando…" : "Guardar" }}</button>
         </div>
       </form>
     </div>
@@ -144,95 +183,19 @@ onMounted(load);
 </template>
 
 <style scoped>
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-h1 {
-  margin: 0 0 4px;
-  font-size: 24px;
-}
-.sites-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
-}
-.site-card {
-  padding: 18px;
-}
-.site-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-.site-head h3 {
-  margin: 0;
+.clickable {
   cursor: pointer;
-  font-size: 16px;
 }
-.site-head h3:hover {
+.clickable:hover {
   color: var(--accent);
 }
-.actions {
+.actions-cell {
   display: flex;
-  gap: 4px;
-}
-.icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 4px;
-  border-radius: 6px;
-}
-.icon-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
-.address {
-  font-size: 13px;
-  margin: 6px 0 12px;
-}
-.stats-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  margin: 10px 0 14px;
-}
-.view-btn {
-  width: 100%;
-  justify-content: center;
-  font-size: 13px;
+  gap: 2px;
 }
 .error {
   color: var(--offline);
-}
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 20px;
-}
-.modal {
-  width: 100%;
-  max-width: 420px;
-  padding: 24px;
-}
-.modal h3 {
-  margin-top: 0;
-}
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 16px;
+  font-size: 12.5px;
+  margin-top: var(--space-2);
 }
 </style>

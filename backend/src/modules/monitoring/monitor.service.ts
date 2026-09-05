@@ -1,4 +1,4 @@
-import { CameraStatus } from "@prisma/client";
+import { CameraStatus, CheckSource } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 import { env } from "../../config/env";
 import { statusEvents, STATUS_CHANGED } from "../../utils/eventBus";
@@ -12,6 +12,13 @@ interface CheckResult {
   raw: unknown;
 }
 
+interface CameraForCheck {
+  id: string;
+  status: CameraStatus;
+  ezvizDeviceSerial: string | null;
+  consecutiveFails: number;
+}
+
 /**
  * Determines connectivity for a single camera using the EZVIZ Open API.
  * See docs/ARCHITECTURE.md ("A vs B") for why this cloud heartbeat is the
@@ -19,11 +26,7 @@ interface CheckResult {
  * failures are used to distinguish a real outage (OFFLINE) from a blip
  * (WARNING) instead of flipping state on a single failed check.
  */
-async function checkCameraOnce(camera: {
-  id: string;
-  ezvizDeviceSerial: string | null;
-  consecutiveFails: number;
-}): Promise<CheckResult | null> {
+async function checkCameraOnce(camera: CameraForCheck): Promise<CheckResult | null> {
   if (!camera.ezvizDeviceSerial) return null;
 
   const credential = await getActiveCredential();
@@ -51,21 +54,18 @@ async function checkCameraOnce(camera: {
   }
 }
 
-export async function checkCameraById(cameraId: string) {
+export async function checkCameraById(cameraId: string, source: CheckSource = "MANUAL") {
   const camera = await prisma.camera.findUnique({ where: { id: cameraId } });
   if (!camera) return null;
-  return applyCheckResult(camera);
+  return applyCheckResult(camera, source);
 }
 
-async function applyCheckResult(camera: {
-  id: string;
-  ezvizDeviceSerial: string | null;
-  consecutiveFails: number;
-}) {
+async function applyCheckResult(camera: CameraForCheck, source: CheckSource) {
   const result = await checkCameraOnce(camera);
   if (!result) return null;
 
   const isOnline = result.status === "ONLINE";
+  const isTransition = result.status !== camera.status;
   const updated = await prisma.camera.update({
     where: { id: camera.id },
     data: {
@@ -74,6 +74,7 @@ async function applyCheckResult(camera: {
       lastLatencyMs: result.latencyMs,
       consecutiveFails: isOnline ? 0 : camera.consecutiveFails + 1,
       ...(isOnline ? { lastOnlineAt: new Date() } : {}),
+      ...(isTransition ? { statusChangedAt: new Date() } : {}),
     },
     select: {
       id: true,
@@ -82,20 +83,27 @@ async function applyCheckResult(camera: {
       lastCheckedAt: true,
       lastOnlineAt: true,
       lastLatencyMs: true,
+      statusChangedAt: true,
       siteId: true,
     },
   });
 
-  await prisma.cameraStatusEvent.create({
-    data: {
-      cameraId: camera.id,
-      status: result.status,
-      source: "EZVIZ_API",
-      latencyMs: result.latencyMs,
-      message: result.message,
-      rawResponse: result.raw as object,
-    },
-  });
+  // The history/activity feed is meant to read as "what changed", not a
+  // flood of identical checks every couple of minutes. A manual check is
+  // always logged (the operator explicitly asked for a record of it); a
+  // scheduled check is only logged when the status actually transitions.
+  if (source === "MANUAL" || isTransition) {
+    await prisma.cameraStatusEvent.create({
+      data: {
+        cameraId: camera.id,
+        status: result.status,
+        source,
+        latencyMs: result.latencyMs,
+        message: result.message,
+        rawResponse: result.raw as object,
+      },
+    });
+  }
 
   statusEvents.emit(STATUS_CHANGED, updated);
   return updated;
@@ -109,11 +117,11 @@ export async function runMonitoringCycle() {
   try {
     const cameras = await prisma.camera.findMany({
       where: { ezvizDeviceSerial: { not: null } },
-      select: { id: true, ezvizDeviceSerial: true, consecutiveFails: true },
+      select: { id: true, status: true, ezvizDeviceSerial: true, consecutiveFails: true },
     });
 
     for (const camera of cameras) {
-      await applyCheckResult(camera).catch((err) => {
+      await applyCheckResult(camera, "EZVIZ_API").catch((err) => {
         console.error(`Error monitoreando cámara ${camera.id}:`, err);
       });
     }

@@ -44,13 +44,16 @@ export interface Camera {
   model: string | null;
   observations: string | null;
   ipAddress: string | null;
+  macAddress: string | null;
   hostname: string | null;
   port: number | null;
   ezvizDeviceSerial: string | null;
   status: CameraStatus;
+  statusChangedAt: string | null;
   lastCheckedAt: string | null;
   lastOnlineAt: string | null;
   lastLatencyMs: number | null;
+  consecutiveFails: number;
   siteId: string;
   site: { id: string; name: string };
   qrAsset: QrAssetSummary | null;
@@ -79,6 +82,28 @@ export interface DashboardCounts {
 export interface DashboardSummary {
   global: DashboardCounts;
   bySite: Array<DashboardCounts & { siteId: string; siteName: string }>;
+}
+
+export interface Incident {
+  id: string;
+  serialNumber: string;
+  code: string | null;
+  status: CameraStatus;
+  lastOnlineAt: string | null;
+  lastCheckedAt: string | null;
+  consecutiveFails: number;
+  site: { id: string; name: string };
+}
+
+export interface RecentEvent {
+  id: string;
+  cameraId: string;
+  status: CameraStatus;
+  source: "EZVIZ_API" | "MANUAL" | "SYSTEM";
+  latencyMs: number | null;
+  message: string | null;
+  checkedAt: string;
+  camera: { id: string; serialNumber: string; site: { name: string } };
 }
 
 export interface ImportRowOutcome {

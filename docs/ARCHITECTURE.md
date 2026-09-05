@@ -112,6 +112,35 @@ librería usada (SheetJS) no extrae imágenes incrustadas en el Excel de forma
 confiable, así que el QR se sube manualmente después de importar, como
 confirmó el usuario que era aceptable.
 
+## 6.1 Sistema de diseño del frontend
+
+Referencia deliberada: herramientas de NOC/observability (Grafana, Datadog,
+sistemas de gestión de infraestructura), no dashboards genéricos. Reglas
+concretas:
+
+- **Sin gradientes, sin glassmorphism, sin sombras decorativas.** La
+  jerarquía se construye con bordes de 1px (`--border`/`--border-strong`)
+  y superficies neutras (`--bg`/`--surface`/`--surface-2`), no con blur ni
+  elevación falsa.
+- **Sin emoji como UI.** Todo icono es SVG propio (`components/Icon.vue`),
+  trazo 1.75px, 24×24, geometría simple.
+- **El estado nunca depende solo del color.** `StatusBadge` combina color +
+  forma (círculo=online, cuadrado=offline, triángulo=intermitente, círculo
+  punteado=sin configurar) + texto, para accesibilidad con daltonismo.
+- **Tipografía dual:** UI en `system-ui`; S/N, IP, MAC, timestamps y
+  cualquier identificador técnico en monoespaciada (`.mono`) — señal visual
+  de "esto es un dato preciso", no un `<Card>` decorativo.
+- **Densidad de NOC, no espaciado de landing page:** tablas de 36-40px por
+  fila, tipografía base de 13px, radios de 3-7px máximo.
+- **Historial = cambios de estado, no un log de cada chequeo.** El monitor
+  solo escribe un `CameraStatusEvent` cuando el estado realmente transiciona
+  (o ante una verificación manual), para que el historial y el feed de
+  actividad del dashboard se lean como "qué pasó", no como ruido repetido
+  cada 2 minutos.
+- **Confirmaciones y notificaciones propias**, no `window.confirm`/`alert`
+  nativos (`stores/confirm.ts` + `ConfirmDialog.vue`, `stores/toast.ts` +
+  `ToastStack.vue`), consistentes con el resto del sistema visual.
+
 ## 7. Alertas (preparado, no activo)
 
 Existen los modelos `AlertRule` y `AlertEvent`, con un campo `channel`

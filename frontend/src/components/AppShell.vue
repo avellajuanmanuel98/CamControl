@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import Icon from "./Icon.vue";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -14,22 +15,27 @@ function logout() {
 <template>
   <div class="shell">
     <aside class="sidebar">
-      <div class="brand">
-        <span class="brand-dot" />
-        CamControl
-      </div>
+      <div class="brand">CamControl</div>
       <nav>
-        <router-link to="/" class="nav-item">📊 Dashboard</router-link>
-        <router-link to="/cameras" class="nav-item">🎥 Cámaras</router-link>
-        <router-link to="/sites" class="nav-item">🏢 Sedes</router-link>
-        <router-link v-if="auth.canManage" to="/import" class="nav-item">📥 Importar</router-link>
+        <router-link to="/" class="nav-item" aria-label="Dashboard" title="Dashboard">
+          <Icon name="dashboard" :size="15" /> <span class="nav-label">Dashboard</span>
+        </router-link>
+        <router-link to="/cameras" class="nav-item" aria-label="Cámaras" title="Cámaras">
+          <Icon name="cameras" :size="15" /> <span class="nav-label">Cámaras</span>
+        </router-link>
+        <router-link to="/sites" class="nav-item" aria-label="Sedes" title="Sedes">
+          <Icon name="sites" :size="15" /> <span class="nav-label">Sedes</span>
+        </router-link>
+        <router-link v-if="auth.canManage" to="/import" class="nav-item" aria-label="Importar" title="Importar">
+          <Icon name="import" :size="15" /> <span class="nav-label">Importar</span>
+        </router-link>
       </nav>
       <div class="sidebar-footer">
         <div class="user-info">
           <div class="user-name">{{ auth.user?.name }}</div>
-          <div class="user-role muted">{{ auth.user?.role }}</div>
+          <div class="user-role dim">{{ auth.user?.role }}</div>
         </div>
-        <button class="btn" @click="logout">Salir</button>
+        <button class="icon-btn" title="Cerrar sesión" @click="logout"><Icon name="logout" :size="15" /></button>
       </div>
     </aside>
     <main class="content">
@@ -44,69 +50,68 @@ function logout() {
   min-height: 100vh;
 }
 .sidebar {
-  width: 230px;
+  width: 200px;
   flex-shrink: 0;
-  background: var(--bg-elevated);
+  background: var(--surface);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 20px 14px;
+  padding: var(--space-4) var(--space-2);
 }
 .brand {
-  font-size: 18px;
+  font-size: 13.5px;
   font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px 20px;
-}
-.brand-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--online);
-  box-shadow: 0 0 8px var(--online);
+  letter-spacing: -0.01em;
+  padding: 0 var(--space-2) var(--space-4);
 }
 nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
   flex: 1;
 }
 .nav-item {
-  padding: 10px 12px;
-  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px var(--space-2);
+  border-radius: var(--radius-sm);
   text-decoration: none;
-  color: var(--text-muted);
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
   font-weight: 500;
+  border-left: 2px solid transparent;
 }
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--surface-2);
   color: var(--text);
 }
 .router-link-exact-active {
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--accent);
+  color: var(--text);
+  border-left-color: var(--accent);
+  background: var(--surface-2);
 }
 .sidebar-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding-top: 14px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-2) 0;
   border-top: 1px solid var(--border);
+  margin-top: var(--space-2);
 }
 .user-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
 }
 .user-role {
-  font-size: 11px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .content {
   flex: 1;
-  padding: 28px 32px;
+  padding: var(--space-5);
   min-width: 0;
 }
 
@@ -118,25 +123,50 @@ nav {
     width: 100%;
     flex-direction: row;
     align-items: center;
-    padding: 10px 14px;
+    padding: var(--space-2) var(--space-3);
   }
   .brand {
-    padding: 0 10px 0 0;
+    padding: 0 var(--space-3) 0 0;
+    flex-shrink: 0;
   }
   nav {
     flex-direction: row;
     flex: 1;
     overflow-x: auto;
+    min-width: 0;
+  }
+  .nav-item {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .router-link-exact-active {
+    border-left-color: transparent;
+    border-bottom-color: var(--accent);
   }
   .sidebar-footer {
     border-top: none;
+    margin-top: 0;
     padding-top: 0;
+    flex-shrink: 0;
   }
   .user-info {
     display: none;
   }
   .content {
-    padding: 18px;
+    padding: var(--space-3);
+  }
+}
+
+/* Icon-only nav below ~480px: fits all sections in one row instead of an
+   ambiguous horizontal scroll on a phone-width screen. */
+@media (max-width: 480px) {
+  .nav-label {
+    display: none;
+  }
+  .nav-item {
+    padding: 8px 10px;
   }
 }
 </style>

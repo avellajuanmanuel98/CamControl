@@ -31,18 +31,15 @@ async function submit() {
 
 <template>
   <div class="login-page">
-    <form class="login-card card" @submit.prevent="submit">
-      <div class="brand">
-        <span class="brand-dot" />
-        CamControl
-      </div>
+    <form class="panel login-card" @submit.prevent="submit">
+      <div class="brand">CamControl</div>
       <p class="subtitle muted">Gestión y monitoreo de cámaras de seguridad</p>
 
-      <div class="form-field">
+      <div class="field">
         <label>Correo</label>
         <input v-model="email" type="email" required autofocus placeholder="usuario@empresa.com" />
       </div>
-      <div class="form-field">
+      <div class="field">
         <label>Contraseña</label>
         <input v-model="password" type="password" required placeholder="••••••••" />
       </div>
@@ -50,7 +47,7 @@ async function submit() {
       <p v-if="error" class="error">{{ error }}</p>
 
       <button class="btn btn-primary" type="submit" :disabled="loading" style="width: 100%; justify-content: center">
-        {{ loading ? "Ingresando..." : "Ingresar" }}
+        {{ loading ? "Ingresando…" : "Ingresar" }}
       </button>
     </form>
   </div>
@@ -62,35 +59,26 @@ async function submit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  background: radial-gradient(circle at 30% 20%, #16213f 0%, var(--bg) 60%);
+  padding: var(--space-4);
+  background: var(--bg);
 }
 .login-card {
   width: 100%;
-  max-width: 380px;
-  padding: 36px;
+  max-width: 340px;
+  padding: var(--space-5);
 }
 .brand {
-  font-size: 22px;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.brand-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--online);
-  box-shadow: 0 0 10px var(--online);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .subtitle {
-  margin: 6px 0 24px;
-  font-size: 13px;
+  margin: 4px 0 var(--space-5);
+  font-size: 12.5px;
 }
 .error {
   color: var(--offline);
-  font-size: 13px;
-  margin-bottom: 14px;
+  font-size: 12.5px;
+  margin-bottom: var(--space-3);
 }
 </style>

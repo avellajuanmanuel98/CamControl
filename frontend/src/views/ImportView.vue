@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { api, apiErrorMessage } from "../services/api";
+import { useToastStore } from "../stores/toast";
 import type { ImportReport, Site } from "../types";
 
 const sites = ref<Site[]>([]);
@@ -13,6 +14,14 @@ const report = ref<ImportReport | null>(null);
 const committed = ref(false);
 const loading = ref(false);
 const error = ref("");
+const toast = useToastStore();
+
+const ACTION_TAG: Record<string, string> = {
+  create: "tag-online",
+  update: "tag-accent",
+  skip: "tag-warning",
+  error: "tag-offline",
+};
 
 function onFileSelected(event: Event) {
   file.value = (event.target as HTMLInputElement).files?.[0] ?? null;
@@ -33,6 +42,7 @@ async function run(dryRun: boolean) {
     const { data } = await api.post<ImportReport>("/import", form);
     report.value = data;
     committed.value = !dryRun;
+    if (!dryRun) toast.success(`Importación completada: ${data.created} creadas, ${data.updated} actualizadas`);
   } catch (err) {
     error.value = apiErrorMessage(err);
   } finally {
@@ -56,27 +66,29 @@ onMounted(async () => {
 <template>
   <div>
     <div class="page-header">
-      <h1>Importar cámaras</h1>
-      <p class="muted">
-        Carga el Excel/CSV con las columnas S/N, CODIGO, CIFRADO, CAPACIDAD, User_Compartidos, ESTADO y
-        opcionalmente SEDE. El QR se sube por separado, después de importar.
-      </p>
+      <div>
+        <h1>Importar cámaras</h1>
+        <p class="subtitle">
+          Carga el Excel/CSV con las columnas S/N, CODIGO, CIFRADO, CAPACIDAD, User_Compartidos, ESTADO y
+          opcionalmente SEDE. El QR se sube por separado, después de importar.
+        </p>
+      </div>
     </div>
 
-    <div class="card form-panel">
-      <div class="form-field">
+    <div class="panel panel-body" style="margin-bottom: var(--space-4)">
+      <div class="field">
         <label>Archivo (.xlsx o .csv)</label>
         <input ref="fileInput" type="file" accept=".xlsx,.xls,.csv" @change="onFileSelected" />
       </div>
       <div class="row">
-        <div class="form-field">
+        <div class="field">
           <label>Sede por defecto (si el archivo no trae columna SEDE)</label>
           <select v-model="defaultSiteId">
             <option value="">— Ninguna (falla si falta la sede) —</option>
             <option v-for="s in sites" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
         </div>
-        <div class="form-field">
+        <div class="field">
           <label>Si el S/N o código ya existe</label>
           <select v-model="duplicateStrategy">
             <option value="skip">Omitir (no tocar la cámara existente)</option>
@@ -89,27 +101,25 @@ onMounted(async () => {
 
       <div class="actions">
         <button class="btn" :disabled="!file || loading" @click="run(true)">
-          {{ loading ? "Procesando..." : "1. Previsualizar" }}
+          {{ loading ? "Procesando…" : "1. Previsualizar" }}
         </button>
-        <button
-          class="btn btn-primary"
-          :disabled="!file || loading || !report || committed"
-          @click="run(false)"
-        >
+        <button class="btn btn-primary" :disabled="!file || loading || !report || committed" @click="run(false)">
           2. Confirmar importación
         </button>
         <button class="btn" @click="reset">Limpiar</button>
       </div>
     </div>
 
-    <div v-if="report" class="card report-panel">
-      <h3>{{ committed ? "Resultado de la importación" : "Previsualización (nada se ha guardado todavía)" }}</h3>
-      <div class="summary-row">
+    <div v-if="report" class="panel">
+      <div class="panel-header">
+        <h2>{{ committed ? "Resultado de la importación" : "Previsualización — nada se ha guardado todavía" }}</h2>
+      </div>
+      <div class="panel-body summary-row">
         <span>Filas totales: <strong>{{ report.totalRows }}</strong></span>
-        <span class="ok">Crear: <strong>{{ report.created }}</strong></span>
-        <span class="ok">Actualizar: <strong>{{ report.updated }}</strong></span>
-        <span class="warn">Omitidas (duplicadas): <strong>{{ report.skipped }}</strong></span>
-        <span class="bad">Errores: <strong>{{ report.errors }}</strong></span>
+        <span style="color: var(--online)">Crear: <strong>{{ report.created }}</strong></span>
+        <span style="color: var(--accent)">Actualizar: <strong>{{ report.updated }}</strong></span>
+        <span style="color: var(--warning)">Omitidas: <strong>{{ report.skipped }}</strong></span>
+        <span style="color: var(--offline)">Errores: <strong>{{ report.errors }}</strong></span>
       </div>
 
       <div class="table-scroll">
@@ -125,13 +135,11 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="row in report.rows" :key="row.rowNumber">
-              <td>{{ row.rowNumber }}</td>
-              <td>
-                <span :class="['tag', row.action]">{{ row.action }}</span>
-              </td>
-              <td>{{ row.serialNumber || "—" }}</td>
+              <td class="mono">{{ row.rowNumber }}</td>
+              <td><span class="tag" :class="ACTION_TAG[row.action]">{{ row.action }}</span></td>
+              <td class="mono">{{ row.serialNumber || "—" }}</td>
               <td>{{ row.siteName || "—" }}</td>
-              <td class="muted">{{ row.reason || "—" }}</td>
+              <td class="dim">{{ row.reason || "—" }}</td>
             </tr>
           </tbody>
         </table>
@@ -141,79 +149,28 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.page-header {
-  margin-bottom: 20px;
-}
-h1 {
-  margin: 0 0 6px;
-  font-size: 24px;
-}
-.form-panel {
-  padding: 22px;
-  margin-bottom: 20px;
-}
 .row {
   display: flex;
-  gap: 20px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-top: 6px;
 }
-.row .form-field {
+.row .field {
   flex: 1;
   min-width: 240px;
 }
 .actions {
   display: flex;
-  gap: 10px;
-  margin-top: 10px;
+  gap: var(--space-2);
   flex-wrap: wrap;
-}
-.report-panel {
-  padding: 22px;
-}
-.report-panel h3 {
-  margin-top: 0;
 }
 .summary-row {
   display: flex;
-  gap: 20px;
+  gap: var(--space-4);
   flex-wrap: wrap;
-  margin-bottom: 16px;
-  font-size: 14px;
-}
-.ok {
-  color: var(--online);
-}
-.warn {
-  color: var(--warning);
-}
-.bad {
-  color: var(--offline);
-}
-.tag {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 999px;
-  text-transform: uppercase;
-}
-.tag.create {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--online);
-}
-.tag.update {
-  background: rgba(59, 130, 246, 0.15);
-  color: var(--accent);
-}
-.tag.skip {
-  background: rgba(245, 158, 11, 0.15);
-  color: var(--warning);
-}
-.tag.error {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--offline);
+  font-size: 13px;
 }
 .error {
   color: var(--offline);
+  font-size: 12.5px;
 }
 </style>
