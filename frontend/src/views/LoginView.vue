@@ -3,6 +3,8 @@ import { ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { api, apiErrorMessage } from "../services/api";
 import { useAuthStore } from "../stores/auth";
+import { useThemeStore } from "../stores/theme";
+import Icon from "../components/Icon.vue";
 
 const email = ref("");
 const password = ref("");
@@ -12,6 +14,7 @@ const loading = ref(false);
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
+const theme = useThemeStore();
 
 async function submit() {
   error.value = "";
@@ -31,6 +34,14 @@ async function submit() {
 
 <template>
   <div class="login-page">
+    <button
+      class="icon-btn theme-toggle"
+      :title="theme.theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'"
+      @click="theme.toggle"
+    >
+      <Icon :name="theme.theme === 'light' ? 'moon' : 'sun'" :size="15" />
+    </button>
+
     <form class="panel login-card" @submit.prevent="submit">
       <div class="brand">CamControl</div>
       <p class="subtitle muted">Gestión y monitoreo de cámaras de seguridad</p>
@@ -61,6 +72,12 @@ async function submit() {
   justify-content: center;
   padding: var(--space-4);
   background: var(--bg);
+  position: relative;
+}
+.theme-toggle {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
 }
 .login-card {
   width: 100%;

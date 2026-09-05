@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CamControl</title>
+    <script>
+      // Applied before first paint so a saved dark preference never flashes
+      // white first. Kept intentionally tiny and dependency-free.
+      (function () {
+        var theme = localStorage.getItem("camcontrol_theme");
+        if (theme === "dark") document.documentElement.setAttribute("data-theme", "dark");
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

@@ -4,35 +4,38 @@
    No gradients, no glassmorphism, no decorative shadows, no pill buttons.
    ========================================================================== */
 
+/* Light is the default theme; [data-theme="dark"] overrides the same
+   variable names below. Layout scale (spacing/radius/fonts) is
+   theme-independent and lives only here. */
 :root {
-  /* --- Surfaces (neutral graphite scale, not pure black/blue-tinted) --- */
-  --bg: #0c0d0f;
-  --surface: #131417;
-  --surface-2: #191b1f;
-  --surface-3: #202226;
-  --border: #26282d;
-  --border-strong: #34373d;
+  /* --- Surfaces --- */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f5f6;
+  --surface-3: #eceef1;
+  --border: #e3e5e8;
+  --border-strong: #c8cbd1;
 
   /* --- Text --- */
-  --text: #e4e5e7;
-  --text-secondary: #9a9da4;
-  --text-tertiary: #6e7178;
+  --text: #16181c;
+  --text-secondary: #5a5f66;
+  --text-tertiary: #878c93;
   --text-on-accent: #ffffff;
 
   /* --- Accent (single restrained hue, used sparingly) --- */
-  --accent: #3b63dd;
-  --accent-hover: #3355c4;
-  --accent-tint: rgba(59, 99, 221, 0.12);
+  --accent: #2454d1;
+  --accent-hover: #1c40a8;
+  --accent-tint: rgba(36, 84, 209, 0.1);
 
   /* --- Status (desaturated — legible as text, not neon) --- */
-  --online: #2f9e57;
-  --online-tint: rgba(47, 158, 87, 0.13);
-  --offline: #d84f4f;
-  --offline-tint: rgba(216, 79, 79, 0.13);
-  --warning: #c98a2b;
-  --warning-tint: rgba(201, 138, 43, 0.14);
-  --neutral: #7d818a;
-  --neutral-tint: rgba(125, 129, 138, 0.14);
+  --online: #1a7f37;
+  --online-tint: rgba(26, 127, 55, 0.1);
+  --offline: #cf222e;
+  --offline-tint: rgba(207, 34, 46, 0.1);
+  --warning: #9a6700;
+  --warning-tint: rgba(154, 103, 0, 0.12);
+  --neutral: #6e7781;
+  --neutral-tint: rgba(110, 119, 129, 0.12);
 
   /* --- Scale --- */
   --radius-sm: 3px;
@@ -47,6 +50,35 @@
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "Roboto Mono", Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0c0d0f;
+  --surface: #131417;
+  --surface-2: #191b1f;
+  --surface-3: #202226;
+  --border: #26282d;
+  --border-strong: #34373d;
+
+  --text: #e4e5e7;
+  --text-secondary: #9a9da4;
+  --text-tertiary: #6e7178;
+  --text-on-accent: #ffffff;
+
+  --accent: #3b63dd;
+  --accent-hover: #3355c4;
+  --accent-tint: rgba(59, 99, 221, 0.12);
+
+  --online: #2f9e57;
+  --online-tint: rgba(47, 158, 87, 0.13);
+  --offline: #d84f4f;
+  --offline-tint: rgba(216, 79, 79, 0.13);
+  --warning: #c98a2b;
+  --warning-tint: rgba(201, 138, 43, 0.14);
+  --neutral: #7d818a;
+  --neutral-tint: rgba(125, 129, 138, 0.14);
 
   color-scheme: dark;
 }

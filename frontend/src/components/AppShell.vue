@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { useThemeStore } from "../stores/theme";
 import Icon from "./Icon.vue";
 
 const router = useRouter();
 const auth = useAuthStore();
+const theme = useThemeStore();
 
 function logout() {
   auth.logout();
@@ -35,6 +37,13 @@ function logout() {
           <div class="user-name">{{ auth.user?.name }}</div>
           <div class="user-role dim">{{ auth.user?.role }}</div>
         </div>
+        <button
+          class="icon-btn"
+          :title="theme.theme === 'light' ? 'Cambiar a modo oscuro' : 'Cambiar a modo claro'"
+          @click="theme.toggle"
+        >
+          <Icon :name="theme.theme === 'light' ? 'moon' : 'sun'" :size="15" />
+        </button>
         <button class="icon-btn" title="Cerrar sesión" @click="logout"><Icon name="logout" :size="15" /></button>
       </div>
     </aside>
