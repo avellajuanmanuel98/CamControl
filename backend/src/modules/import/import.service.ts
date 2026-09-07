@@ -78,7 +78,20 @@ function normalizeRecord(raw: Record<string, unknown>): Record<string, unknown> 
   const normalized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
     const alias = HEADER_ALIASES[normalizeHeader(key)];
-    if (alias) normalized[alias] = typeof value === "string" ? value.trim() : value;
+    if (!alias) continue;
+    if (value === null || value === undefined) {
+      normalized[alias] = "";
+    } else if (typeof value === "string") {
+      normalized[alias] = value.trim();
+    } else {
+      // Every one of our import columns is a text field in the DB, but a
+      // spreadsheet cell that "looks like text" (a capacidad of 128, a
+      // cifrado that's all digits, a S/N that's purely numeric) is often
+      // stored by Excel as a number — stringify it instead of passing a
+      // raw number/boolean/Date straight to Prisma, which used to crash
+      // the entire import on that one row.
+      normalized[alias] = String(value).trim();
+    }
   }
   return normalized;
 }
@@ -201,59 +214,83 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
       continue;
     }
 
-    const existing = await prisma.camera.findFirst({
-      where: {
-        OR: [{ serialNumber }, ...(data.code ? [{ code: data.code }] : [])],
-      },
-    });
+    // A single malformed row (an unexpected data type, a DB constraint
+    // violation, etc.) must never abort the whole batch — it gets reported
+    // as an error for that row, and the import keeps going.
+    try {
+      const existing = await prisma.camera.findFirst({
+        where: {
+          OR: [{ serialNumber }, ...(data.code ? [{ code: data.code }] : [])],
+        },
+      });
 
-    const status = data.estado ? ESTADO_TO_STATUS[normalizeHeader(data.estado)] ?? "UNCONFIGURED" : "UNCONFIGURED";
-    const payload = {
-      serialNumber,
-      code: data.code || null,
-      cifrado: data.cifrado || null,
-      capacidad: data.capacidad || null,
-      sharedUser: data.sharedUser || null,
-      model: data.model || null,
-      ipAddress: data.ipAddress || null,
-      hostname: data.hostname || null,
-      observations: data.observations || null,
-      port: data.port ? Number(data.port) || null : null,
-      status,
-      siteId,
-      createdById: options.importedById,
-    };
+      const status = data.estado
+        ? ESTADO_TO_STATUS[normalizeHeader(data.estado)] ?? "UNCONFIGURED"
+        : "UNCONFIGURED";
+      const payload = {
+        serialNumber,
+        code: data.code || null,
+        cifrado: data.cifrado || null,
+        capacidad: data.capacidad || null,
+        sharedUser: data.sharedUser || null,
+        model: data.model || null,
+        ipAddress: data.ipAddress || null,
+        hostname: data.hostname || null,
+        observations: data.observations || null,
+        port: data.port ? Number(data.port) || null : null,
+        status,
+        siteId,
+        createdById: options.importedById,
+      };
 
-    if (existing) {
-      if (options.duplicateStrategy === "skip") {
+      if (existing) {
+        if (options.duplicateStrategy === "skip") {
+          outcomes.push({
+            rowNumber: row.rowNumber,
+            sheetName: row.sheetName,
+            action: "skip",
+            reason: `Ya existe una cámara con ese S/N o código (id ${existing.id})`,
+            serialNumber,
+            siteName,
+          });
+          skipped++;
+          continue;
+        }
+        if (!options.dryRun) {
+          const statusChanged = existing.status !== status;
+          await prisma.camera.update({
+            where: { id: existing.id },
+            data: { ...payload, ...(statusChanged ? { statusChangedAt: new Date() } : {}) },
+          });
+        }
         outcomes.push({
           rowNumber: row.rowNumber,
           sheetName: row.sheetName,
-          action: "skip",
-          reason: `Ya existe una cámara con ese S/N o código (id ${existing.id})`,
+          action: "update",
           serialNumber,
           siteName,
         });
-        skipped++;
+        updated++;
         continue;
       }
-      if (!options.dryRun) {
-        const statusChanged = existing.status !== status;
-        await prisma.camera.update({
-          where: { id: existing.id },
-          data: { ...payload, ...(statusChanged ? { statusChangedAt: new Date() } : {}) },
-        });
-      }
-      outcomes.push({ rowNumber: row.rowNumber, sheetName: row.sheetName, action: "update", serialNumber, siteName });
-      updated++;
-      continue;
-    }
 
-    if (!options.dryRun) {
-      await prisma.camera.create({ data: { ...payload, statusChangedAt: new Date() } });
+      if (!options.dryRun) {
+        await prisma.camera.create({ data: { ...payload, statusChangedAt: new Date() } });
+      }
+      outcomes.push({ rowNumber: row.rowNumber, sheetName: row.sheetName, action: "create", serialNumber, siteName });
+      created++;
+    } catch (err) {
+      const message = err instanceof Error ? err.message.split("\n")[0] : "Error desconocido al guardar la fila";
+      outcomes.push({
+        rowNumber: row.rowNumber,
+        sheetName: row.sheetName,
+        action: "error",
+        reason: message,
+        serialNumber,
+        siteName,
+      });
+      errors++;
     }
-    outcomes.push({ rowNumber: row.rowNumber, sheetName: row.sheetName, action: "create", serialNumber, siteName });
-    created++;
   }
 
   if (!options.dryRun) {
