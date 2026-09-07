@@ -8,6 +8,15 @@ export interface AuthUser {
   role: UserRole;
 }
 
+export interface AppUser {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  active: boolean;
+  createdAt: string;
+}
+
 export interface SiteStats {
   total: number;
   online: number;

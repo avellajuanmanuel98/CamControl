@@ -31,6 +31,9 @@ function logout() {
         <router-link v-if="auth.canManage" to="/import" class="nav-item" aria-label="Importar" title="Importar">
           <Icon name="import" :size="15" /> <span class="nav-label">Importar</span>
         </router-link>
+        <router-link v-if="auth.isAdmin" to="/users" class="nav-item" aria-label="Usuarios" title="Usuarios">
+          <Icon name="users" :size="15" /> <span class="nav-label">Usuarios</span>
+        </router-link>
       </nav>
       <div class="sidebar-footer">
         <div class="user-info">

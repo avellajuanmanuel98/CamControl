@@ -27,6 +27,12 @@ const router = createRouter({
       component: () => import("../views/ImportView.vue"),
       meta: { requiresManage: true },
     },
+    {
+      path: "/users",
+      name: "users",
+      component: () => import("../views/UsersView.vue"),
+      meta: { requiresAdmin: true },
+    },
   ],
 });
 
@@ -39,6 +45,9 @@ router.beforeEach((to) => {
     return { name: "dashboard" };
   }
   if (to.meta.requiresManage && !auth.canManage) {
+    return { name: "dashboard" };
+  }
+  if (to.meta.requiresAdmin && !auth.isAdmin) {
     return { name: "dashboard" };
   }
   return true;

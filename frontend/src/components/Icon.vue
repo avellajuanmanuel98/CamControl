@@ -31,7 +31,8 @@ export type IconName =
   | "activity"
   | "mac"
   | "sun"
-  | "moon";
+  | "moon"
+  | "users";
 </script>
 
 <template>
@@ -157,6 +158,12 @@ export type IconName =
     </template>
     <template v-else-if="name === 'moon'">
       <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />
+    </template>
+    <template v-else-if="name === 'users'">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <path d="M16 4.3a3.2 3.2 0 0 1 0 6.2" />
+      <path d="M21 20c0-2.8-2-5.1-4.6-5.8" />
     </template>
   </svg>
 </template>
