@@ -4,12 +4,14 @@ import { CameraStatus } from "@prisma/client";
 import { prisma } from "../../db/prisma";
 
 export interface ParsedRow {
-  rowNumber: number; // 1-based, matches spreadsheet row (header excluded)
+  rowNumber: number; // 1-based within its own sheet (header excluded)
+  sheetName: string;
   raw: Record<string, unknown>;
 }
 
 export interface RowOutcome {
   rowNumber: number;
+  sheetName: string;
   action: "create" | "update" | "skip" | "error";
   reason?: string;
   serialNumber?: string;
@@ -68,26 +70,45 @@ const ESTADO_TO_STATUS: Record<string, CameraStatus> = {
   INACTIVA: "OFFLINE",
 };
 
+function normalizeRecord(raw: Record<string, unknown>): Record<string, unknown> {
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const alias = HEADER_ALIASES[normalizeHeader(key)];
+    if (alias) normalized[alias] = typeof value === "string" ? value.trim() : value;
+  }
+  return normalized;
+}
+
+// Reads every sheet in the workbook, not just the first one — real
+// inventories are often split across tabs (one per site, "Chile", "Luc",
+// etc.), and skipping the rest silently used to drop most of the rows.
 export function parseSpreadsheet(buffer: Buffer, filename: string): ParsedRow[] {
   const isCsv = filename.toLowerCase().endsWith(".csv");
-  let records: Record<string, unknown>[];
 
   if (isCsv) {
-    records = parseCsv(buffer, { columns: true, skip_empty_lines: true, trim: true });
-  } else {
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const firstSheet = workbook.SheetNames[0];
-    records = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" });
+    const records = parseCsv(buffer, { columns: true, skip_empty_lines: true, trim: true }) as Record<
+      string,
+      unknown
+    >[];
+    return records.map((raw, idx) => ({ rowNumber: idx + 1, sheetName: filename, raw: normalizeRecord(raw) }));
   }
 
-  return records.map((raw, idx) => {
-    const normalized: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(raw)) {
-      const alias = HEADER_ALIASES[normalizeHeader(key)];
-      if (alias) normalized[alias] = typeof value === "string" ? value.trim() : value;
-    }
-    return { rowNumber: idx + 1, raw: normalized };
-  });
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const rows: ParsedRow[] = [];
+  for (const sheetName of workbook.SheetNames) {
+    const sheetRecords = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: "" }) as Record<
+      string,
+      unknown
+    >[];
+    sheetRecords.forEach((raw, idx) => {
+      // Skip fully-empty rows (common at the end of a sheet or between
+      // blocks) instead of reporting them as "falta S/N" errors.
+      const normalized = normalizeRecord(raw);
+      const hasAnyValue = Object.values(normalized).some((v) => String(v ?? "").trim() !== "");
+      if (hasAnyValue) rows.push({ rowNumber: idx + 1, sheetName, raw: normalized });
+    });
+  }
+  return rows;
 }
 
 export interface ImportOptions {
@@ -113,7 +134,12 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
     const serialNumber = data.serialNumber?.toString().trim();
 
     if (!serialNumber) {
-      outcomes.push({ rowNumber: row.rowNumber, action: "error", reason: "Falta S/N (columna obligatoria)" });
+      outcomes.push({
+        rowNumber: row.rowNumber,
+        sheetName: row.sheetName,
+        action: "error",
+        reason: "Falta S/N (columna obligatoria)",
+      });
       errors++;
       continue;
     }
@@ -127,11 +153,22 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
         siteName = data.sede;
       }
     }
+    // No explicit SEDE column value → try the sheet/tab name itself
+    // ("Chile", "Funza", ...), which is how multi-sede spreadsheets are
+    // commonly organized (one tab per site).
+    if (!siteName) {
+      const sheetMatch = siteByNormalizedName.get(normalizeHeader(row.sheetName));
+      if (sheetMatch) {
+        siteId = sheetMatch;
+        siteName = row.sheetName;
+      }
+    }
     if (!siteId) {
       outcomes.push({
         rowNumber: row.rowNumber,
+        sheetName: row.sheetName,
         action: "error",
-        reason: `Sede "${data.sede ?? ""}" no encontrada y no se definió una sede por defecto`,
+        reason: `Sede "${data.sede ?? row.sheetName}" no encontrada y no se definió una sede por defecto`,
         serialNumber,
       });
       errors++;
@@ -165,6 +202,7 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
       if (options.duplicateStrategy === "skip") {
         outcomes.push({
           rowNumber: row.rowNumber,
+          sheetName: row.sheetName,
           action: "skip",
           reason: `Ya existe una cámara con ese S/N o código (id ${existing.id})`,
           serialNumber,
@@ -180,7 +218,7 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
           data: { ...payload, ...(statusChanged ? { statusChangedAt: new Date() } : {}) },
         });
       }
-      outcomes.push({ rowNumber: row.rowNumber, action: "update", serialNumber, siteName });
+      outcomes.push({ rowNumber: row.rowNumber, sheetName: row.sheetName, action: "update", serialNumber, siteName });
       updated++;
       continue;
     }
@@ -188,7 +226,7 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
     if (!options.dryRun) {
       await prisma.camera.create({ data: { ...payload, statusChangedAt: new Date() } });
     }
-    outcomes.push({ rowNumber: row.rowNumber, action: "create", serialNumber, siteName });
+    outcomes.push({ rowNumber: row.rowNumber, sheetName: row.sheetName, action: "create", serialNumber, siteName });
     created++;
   }
 

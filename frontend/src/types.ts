@@ -117,6 +117,7 @@ export interface RecentEvent {
 
 export interface ImportRowOutcome {
   rowNumber: number;
+  sheetName: string;
   action: "create" | "update" | "skip" | "error";
   reason?: string;
   serialNumber?: string;

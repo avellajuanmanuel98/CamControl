@@ -70,7 +70,9 @@ onMounted(async () => {
         <h1>Importar cámaras</h1>
         <p class="subtitle">
           Carga el Excel/CSV con las columnas S/N, CODIGO, CIFRADO, CAPACIDAD, User_Compartidos, ESTADO y
-          opcionalmente SEDE. El QR se sube por separado, después de importar.
+          opcionalmente SEDE. Si el archivo tiene varias hojas/pestañas (una por sede, por ejemplo), se leen
+          todas — y si una fila no trae columna SEDE, se usa el nombre de la pestaña como sede si coincide con
+          una existente. El QR se sube por separado, después de importar.
         </p>
       </div>
     </div>
@@ -126,6 +128,7 @@ onMounted(async () => {
         <table>
           <thead>
             <tr>
+              <th>Hoja</th>
               <th>Fila</th>
               <th>Acción</th>
               <th>S/N</th>
@@ -134,7 +137,8 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in report.rows" :key="row.rowNumber">
+            <tr v-for="(row, i) in report.rows" :key="`${row.sheetName}-${row.rowNumber}-${i}`">
+              <td class="dim">{{ row.sheetName }}</td>
               <td class="mono">{{ row.rowNumber }}</td>
               <td><span class="tag" :class="ACTION_TAG[row.action]">{{ row.action }}</span></td>
               <td class="mono">{{ row.serialNumber || "—" }}</td>
