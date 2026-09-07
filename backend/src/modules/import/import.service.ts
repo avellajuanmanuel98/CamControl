@@ -24,6 +24,10 @@ export interface ImportReport {
   updated: number;
   skipped: number;
   errors: number;
+  // Distinct SEDE/sheet labels that produced a "sede no encontrada" error,
+  // in the original casing/spacing from the file — lets the frontend offer
+  // "create these sites" instead of a dead-end error.
+  unresolvedSiteLabels: string[];
   rows: RowOutcome[];
 }
 
@@ -142,6 +146,7 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
   const siteByNormalizedName = new Map(sites.map((s) => [normalizeHeader(s.name), s.id]));
 
   const outcomes: RowOutcome[] = [];
+  const unresolvedSiteLabels = new Set<string>();
   let created = 0;
   let updated = 0;
   let skipped = 0;
@@ -183,11 +188,13 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
       }
     }
     if (!siteId) {
+      const label = data.sede ?? row.sheetName;
+      unresolvedSiteLabels.add(label);
       outcomes.push({
         rowNumber: row.rowNumber,
         sheetName: row.sheetName,
         action: "error",
-        reason: `Sede "${data.sede ?? row.sheetName}" no encontrada y no se definió una sede por defecto`,
+        reason: `Sede "${label}" no encontrada y no se definió una sede por defecto`,
         serialNumber,
       });
       errors++;
@@ -269,5 +276,13 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
     });
   }
 
-  return { totalRows: rows.length, created, updated, skipped, errors, rows: outcomes };
+  return {
+    totalRows: rows.length,
+    created,
+    updated,
+    skipped,
+    errors,
+    unresolvedSiteLabels: Array.from(unresolvedSiteLabels),
+    rows: outcomes,
+  };
 }

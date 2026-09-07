@@ -130,5 +130,6 @@ export interface ImportReport {
   updated: number;
   skipped: number;
   errors: number;
+  unresolvedSiteLabels: string[];
   rows: ImportRowOutcome[];
 }

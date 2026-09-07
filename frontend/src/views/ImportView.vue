@@ -16,6 +16,9 @@ const loading = ref(false);
 const error = ref("");
 const toast = useToastStore();
 
+const selectedMissingSites = ref<Set<string>>(new Set());
+const creatingSites = ref(false);
+
 const ACTION_TAG: Record<string, string> = {
   create: "tag-online",
   update: "tag-accent",
@@ -42,11 +45,30 @@ async function run(dryRun: boolean) {
     const { data } = await api.post<ImportReport>("/import", form);
     report.value = data;
     committed.value = !dryRun;
+    selectedMissingSites.value = new Set(data.unresolvedSiteLabels);
     if (!dryRun) toast.success(`Importación completada: ${data.created} creadas, ${data.updated} actualizadas`);
   } catch (err) {
     error.value = apiErrorMessage(err);
   } finally {
     loading.value = false;
+  }
+}
+
+async function createMissingSites() {
+  if (selectedMissingSites.value.size === 0) return;
+  creatingSites.value = true;
+  try {
+    for (const name of selectedMissingSites.value) {
+      await api.post("/sites", { name });
+    }
+    toast.success(`${selectedMissingSites.value.size} sede(s) creada(s)`);
+    const { data } = await api.get<Site[]>("/sites");
+    sites.value = data;
+    await run(true); // re-preview now that those sedes exist
+  } catch (err) {
+    error.value = apiErrorMessage(err);
+  } finally {
+    creatingSites.value = false;
   }
 }
 
@@ -109,6 +131,39 @@ onMounted(async () => {
           2. Confirmar importación
         </button>
         <button class="btn" @click="reset">Limpiar</button>
+      </div>
+    </div>
+
+    <div v-if="report?.unresolvedSiteLabels.length" class="panel missing-sites-panel">
+      <div class="panel-header">
+        <h2>Sedes no encontradas ({{ report.unresolvedSiteLabels.length }})</h2>
+      </div>
+      <div class="panel-body">
+        <p class="dim" style="margin: 0 0 var(--space-3)">
+          Estos nombres de sede (o de pestaña) del archivo no coinciden con ninguna sede existente. Marca las
+          que quieras crear tal cual aparecen — si alguna es en realidad un error de tipeo de una sede que ya
+          tienes, destildala y corrígela en el archivo en vez de crear una sede duplicada.
+        </p>
+        <ul class="missing-sites-list">
+          <li v-for="label in report.unresolvedSiteLabels" :key="label">
+            <label style="display: flex; align-items: center; gap: 8px; text-transform: none; font-size: 13px">
+              <input
+                type="checkbox"
+                :checked="selectedMissingSites.has(label)"
+                style="width: auto; height: auto"
+                @change="
+                  ($event.target as HTMLInputElement).checked
+                    ? selectedMissingSites.add(label)
+                    : selectedMissingSites.delete(label)
+                "
+              />
+              <span class="mono">{{ label }}</span>
+            </label>
+          </li>
+        </ul>
+        <button class="btn btn-primary btn-sm" :disabled="creatingSites || selectedMissingSites.size === 0" @click="createMissingSites">
+          {{ creatingSites ? "Creando…" : `Crear ${selectedMissingSites.size} sede(s) y volver a previsualizar` }}
+        </button>
       </div>
     </div>
 
@@ -176,5 +231,19 @@ onMounted(async () => {
 .error {
   color: var(--offline);
   font-size: 12.5px;
+}
+.missing-sites-panel {
+  margin-bottom: var(--space-4);
+  border-color: var(--warning);
+}
+.missing-sites-list {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
 }
 </style>
