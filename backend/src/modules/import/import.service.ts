@@ -119,6 +119,24 @@ export interface ImportOptions {
   filename: string;
 }
 
+/**
+ * Matches a SEDE value or sheet/tab name to a known site. Tries an exact
+ * match first ("Chile" → Chile), then falls back to a prefix match on
+ * "<Sede>_algo" / "<Sede>-algo" labels (e.g. a tab named "MEDELLIN_CAL" or
+ * "MEDELLIN-CALABAZA" still resolves to the site "Medellín") — common when
+ * a spreadsheet splits one site across several tabs by client/batch.
+ */
+function resolveSite(label: string, siteByNormalizedName: Map<string, string>): string | null {
+  const normalized = normalizeHeader(label);
+  const exact = siteByNormalizedName.get(normalized);
+  if (exact) return exact;
+
+  for (const [siteKey, siteId] of siteByNormalizedName) {
+    if (normalized.startsWith(`${siteKey}_`) || normalized.startsWith(`${siteKey}-`)) return siteId;
+  }
+  return null;
+}
+
 export async function runImport(rows: ParsedRow[], options: ImportOptions): Promise<ImportReport> {
   const sites = await prisma.site.findMany({ select: { id: true, name: true } });
   const siteByNormalizedName = new Map(sites.map((s) => [normalizeHeader(s.name), s.id]));
@@ -147,17 +165,18 @@ export async function runImport(rows: ParsedRow[], options: ImportOptions): Prom
     let siteId = options.defaultSiteId ?? null;
     let siteName: string | undefined;
     if (data.sede) {
-      const match = siteByNormalizedName.get(normalizeHeader(data.sede));
+      const match = resolveSite(data.sede, siteByNormalizedName);
       if (match) {
         siteId = match;
         siteName = data.sede;
       }
     }
     // No explicit SEDE column value → try the sheet/tab name itself
-    // ("Chile", "Funza", ...), which is how multi-sede spreadsheets are
-    // commonly organized (one tab per site).
+    // ("Chile", "Funza", "MEDELLIN_CAL", ...), which is how multi-sede
+    // spreadsheets are commonly organized (one tab per site, sometimes with
+    // a client/batch suffix).
     if (!siteName) {
-      const sheetMatch = siteByNormalizedName.get(normalizeHeader(row.sheetName));
+      const sheetMatch = resolveSite(row.sheetName, siteByNormalizedName);
       if (sheetMatch) {
         siteId = sheetMatch;
         siteName = row.sheetName;
