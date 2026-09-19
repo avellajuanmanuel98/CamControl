@@ -5,6 +5,7 @@ import { api, apiErrorMessage } from "../services/api";
 import { useToastStore } from "../stores/toast";
 import QrThumb from "../components/QrThumb.vue";
 import QrModal from "../components/QrModal.vue";
+import LiveViewModal from "../components/LiveViewModal.vue";
 import StatusBadge from "../components/StatusBadge.vue";
 import Icon from "../components/Icon.vue";
 import { friendlyDateTime, relativeTime, downDuration } from "../utils/time";
@@ -22,6 +23,7 @@ const saving = ref(false);
 const error = ref("");
 const camera = ref<Camera | null>(null);
 const showQrModal = ref(false);
+const showLiveModal = ref(false);
 const history = ref<CameraStatusEvent[]>([]);
 
 const form = ref({
@@ -132,6 +134,15 @@ onMounted(async () => {
         </router-link>
         <h1 class="mono">{{ isEdit ? form.serialNumber || "Cámara" : "Nueva cámara" }}</h1>
         <StatusBadge v-if="camera" :status="camera.status" />
+        <button
+          v-if="camera?.ezvizDeviceSerial"
+          type="button"
+          class="btn btn-sm"
+          style="margin-left: auto"
+          @click="showLiveModal = true"
+        >
+          <Icon name="cameras" :size="13" /> Ver en vivo
+        </button>
       </div>
     </div>
 
@@ -303,6 +314,7 @@ onMounted(async () => {
     </form>
 
     <QrModal v-if="showQrModal && camera" :camera="camera" @close="showQrModal = false" @updated="onQrUpdated" />
+    <LiveViewModal v-if="showLiveModal && camera" :camera="camera" @close="showLiveModal = false" />
   </div>
 </template>
 

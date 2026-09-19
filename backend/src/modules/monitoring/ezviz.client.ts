@@ -67,6 +67,16 @@ async function getAccessToken(appKey: string, appSecret: string): Promise<TokenC
 }
 
 /**
+ * Just the accessToken, for callers (like the live-view endpoint) that only
+ * need to hand it to the EZUIKit player — the region routing (areaDomain)
+ * only matters for our own device/info calls above.
+ */
+export async function getEzvizAccessToken(appKey: string, appSecret: string): Promise<string> {
+  const cache = await getAccessToken(appKey, appSecret);
+  return cache.token;
+}
+
+/**
  * Queries device connectivity status via the official EZVIZ Open API.
  * This reflects whether the camera currently holds a live session with the
  * EZVIZ cloud (i.e. genuine network+device connectivity), not just that our

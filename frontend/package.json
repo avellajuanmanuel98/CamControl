@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "axios": "^1.7.7",
+    "ezuikit-js": "^9.0.22",
     "pinia": "^2.2.4",
     "vue": "^3.5.10",
     "vue-router": "^4.4.5"

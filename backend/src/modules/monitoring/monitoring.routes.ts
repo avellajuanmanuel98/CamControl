@@ -2,9 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { requireAuth, requireRole } from "../../middleware/auth";
-import { listCredentials, upsertCredential } from "./credentials.service";
+import { prisma } from "../../db/prisma";
+import { listCredentials, upsertCredential, getActiveCredential } from "./credentials.service";
 import { checkCameraById } from "./monitor.service";
-import { badRequest } from "../../utils/AppError";
+import { EzvizApiError, getEzvizAccessToken } from "./ezviz.client";
+import { badRequest, notFound } from "../../utils/AppError";
 
 export const monitoringRouter = Router();
 monitoringRouter.use(requireAuth);
@@ -47,5 +49,41 @@ monitoringRouter.post(
       );
     }
     res.json(result);
+  })
+);
+
+// Everything the EZUIKit web player needs to open a live stream in the
+// browser: an accessToken and an ezopen:// URL. The verification code
+// (`cifrado`) is a per-device credential the EZVIZ apps themselves handle
+// client-side (it's not an account-wide secret like AppKey/AppSecret), so
+// embedding it in the URL here — never the AppKey/AppSecret — matches how
+// EZVIZ's own clients work.
+monitoringRouter.get(
+  "/cameras/:id/live",
+  asyncHandler(async (req, res) => {
+    const camera = await prisma.camera.findUnique({ where: { id: req.params.id } });
+    if (!camera) throw notFound("Cámara");
+    if (!camera.ezvizDeviceSerial) {
+      throw badRequest("Esta cámara no tiene un serial EZVIZ configurado");
+    }
+
+    const credential = await getActiveCredential();
+    if (!credential) {
+      throw badRequest("No hay credenciales EZVIZ activas configuradas");
+    }
+
+    let accessToken: string;
+    try {
+      accessToken = await getEzvizAccessToken(credential.appKey, credential.appSecret);
+    } catch (err) {
+      const message = err instanceof EzvizApiError ? `Error EZVIZ: ${err.message}` : "No se pudo contactar a EZVIZ";
+      throw badRequest(message);
+    }
+
+    const codePrefix = camera.cifrado ? `${camera.cifrado}@` : "";
+    res.json({
+      accessToken,
+      url: `ezopen://${codePrefix}open.ezviz.com/${camera.ezvizDeviceSerial}/1.hd.live`,
+    });
   })
 );
