@@ -53,11 +53,14 @@ monitoringRouter.post(
 );
 
 // Everything the EZUIKit web player needs to open a live stream in the
-// browser: an accessToken and an ezopen:// URL. The verification code
-// (`cifrado`) is a per-device credential the EZVIZ apps themselves handle
-// client-side (it's not an account-wide secret like AppKey/AppSecret), so
-// embedding it in the URL here — never the AppKey/AppSecret — matches how
-// EZVIZ's own clients work.
+// browser: an accessToken and an ezopen:// URL. We deliberately do NOT
+// embed the device's verification code (`cifrado`) in the URL here —
+// verified against a real device that once its encryption gate has been
+// accepted once (from any first-party EZVIZ client, e.g. the Open Platform
+// console), the plain address plays fine and embedding the code anyway
+// caused playback to fail. If a genuinely still-encrypted device needs it,
+// EZUIKit's handleError callback (nErrorCode 5) is the signal to prompt for
+// it and retry via changePlayUrl — not something to guess upfront.
 monitoringRouter.get(
   "/cameras/:id/live",
   asyncHandler(async (req, res) => {
@@ -80,10 +83,9 @@ monitoringRouter.get(
       throw badRequest(message);
     }
 
-    const codePrefix = camera.cifrado ? `${camera.cifrado}@` : "";
     res.json({
       accessToken,
-      url: `ezopen://${codePrefix}open.ezviz.com/${camera.ezvizDeviceSerial}/1.hd.live`,
+      url: `ezopen://open.ezviz.com/${camera.ezvizDeviceSerial}/1.hd.live`,
     });
   })
 );
