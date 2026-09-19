@@ -13,6 +13,15 @@ const loading = ref(true);
 const error = ref("");
 let player: EZUIKitPlayer | null = null;
 
+// EZUIKit defaults its own internal calls (device list, stream quality,
+// cloud recordings — separate from our own /live endpoint) to China's
+// open.ys7.com unless told otherwise, which silently returns empty/wrong
+// data for accounts outside China (confirmed: getDeviceList() came back []
+// against the default domain). EZVIZ's SDK docs list a fixed domain per
+// account region; this deployment's EZVIZ account is on the South America
+// region (confirmed from the Open Platform console URL, isaopen.ezviz.com).
+const EZVIZ_ENV_DOMAIN = "https://isaopen.ezvizlife.com";
+
 async function start() {
   loading.value = true;
   error.value = "";
@@ -31,6 +40,7 @@ async function start() {
       // instead of relying on EZVIZ's remote CDN, which can fail silently
       // on some networks and leave the player stuck on a black frame.
       staticPath: "/ezuikit_static",
+      env: { domain: EZVIZ_ENV_DOMAIN },
       handleError: (err: { type?: string; data?: { nErrorCode?: number } }) => {
         if (err?.type === "handleRunTimeInfoError" && err?.data?.nErrorCode === 5) {
           error.value = "Código de verificación (cifrado) incorrecto o faltante para esta cámara.";
