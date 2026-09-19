@@ -1,11 +1,20 @@
 import axios from "axios";
 
-// Official EZVIZ Open Platform HTTP API (open.ys7.com). We deliberately use
-// ONLY this documented, credentialed API — never the reverse-engineered
-// consumer-app endpoints some community libraries use, to stay within
-// EZVIZ's terms of use.
+// Official EZVIZ Open Platform HTTP API. We deliberately use ONLY this
+// documented, credentialed API — never the reverse-engineered consumer-app
+// endpoints some community libraries use, to stay within EZVIZ's terms of
+// use.
 // Docs: https://open.ys7.com/help/en/492 , https://open.ys7.com/doc/en/HTTP/device_select.html
-const BASE_URL = process.env.EZVIZ_API_BASE_URL ?? "https://open.ys7.com/api/lapp";
+//
+// EZVIZ splits accounts across regional API domains (China vs. international
+// areas). token/get is reachable from a single global entry point regardless
+// of the account's region, but its response carries an "areaDomain" field —
+// the actual regional domain that MUST be used for every other call (like
+// device/info); the token itself is only valid within that region. Calling
+// a fixed domain for everything (e.g. always open.ys7.com, which is China's
+// domain) fails with "appKey不存在"/"appKey does not exist" for accounts
+// registered outside China.
+const TOKEN_ENTRY_URL = process.env.EZVIZ_API_BASE_URL ?? "https://open.ezvizlife.com/api/lapp";
 
 export interface EzvizDeviceInfo {
   deviceSerial: string;
@@ -16,6 +25,7 @@ export interface EzvizDeviceInfo {
 
 interface TokenCache {
   token: string;
+  areaDomain: string;
   expiresAt: number; // epoch ms
 }
 
@@ -28,14 +38,14 @@ export class EzvizApiError extends Error {
   }
 }
 
-async function getAccessToken(appKey: string, appSecret: string): Promise<string> {
+async function getAccessToken(appKey: string, appSecret: string): Promise<TokenCache> {
   const cached = tokenCacheByKey.get(appKey);
   if (cached && cached.expiresAt > Date.now() + 60_000) {
-    return cached.token;
+    return cached;
   }
 
   const response = await axios.post(
-    `${BASE_URL}/token/get`,
+    `${TOKEN_ENTRY_URL}/token/get`,
     new URLSearchParams({ appKey, appSecret }),
     { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 8000 }
   );
@@ -45,10 +55,15 @@ async function getAccessToken(appKey: string, appSecret: string): Promise<string
     throw new EzvizApiError(body?.msg ?? "No se pudo obtener el token de EZVIZ", body?.code);
   }
 
-  const token = body.data.accessToken as string;
-  const expiresAt = Number(body.data.expireTime); // EZVIZ returns an epoch-ms expiry
-  tokenCacheByKey.set(appKey, { token, expiresAt });
-  return token;
+  const cache: TokenCache = {
+    token: body.data.accessToken as string,
+    // Fall back to the entry domain itself if EZVIZ ever omits areaDomain
+    // (observed on some China-region responses).
+    areaDomain: (body.data.areaDomain as string) || TOKEN_ENTRY_URL.replace(/\/api\/lapp\/?$/, ""),
+    expiresAt: Number(body.data.expireTime), // EZVIZ returns an epoch-ms expiry
+  };
+  tokenCacheByKey.set(appKey, cache);
+  return cache;
 }
 
 /**
@@ -63,10 +78,10 @@ export async function fetchDeviceInfo(
   appSecret: string,
   deviceSerial: string
 ): Promise<EzvizDeviceInfo> {
-  const accessToken = await getAccessToken(appKey, appSecret);
+  const { token: accessToken, areaDomain } = await getAccessToken(appKey, appSecret);
 
   const response = await axios.post(
-    `${BASE_URL}/device/info`,
+    `${areaDomain}/api/lapp/device/info`,
     new URLSearchParams({ accessToken, deviceSerial }),
     { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 8000 }
   );
