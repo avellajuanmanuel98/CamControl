@@ -133,3 +133,11 @@ export interface ImportReport {
   unresolvedSiteLabels: string[];
   rows: ImportRowOutcome[];
 }
+
+export interface EzvizCredential {
+  id: string;
+  label: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

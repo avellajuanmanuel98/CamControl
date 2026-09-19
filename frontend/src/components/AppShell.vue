@@ -34,6 +34,9 @@ function logout() {
         <router-link v-if="auth.isAdmin" to="/users" class="nav-item" aria-label="Usuarios" title="Usuarios">
           <Icon name="users" :size="15" /> <span class="nav-label">Usuarios</span>
         </router-link>
+        <router-link v-if="auth.isAdmin" to="/settings" class="nav-item" aria-label="Configuración" title="Configuración">
+          <Icon name="settings" :size="15" /> <span class="nav-label">Configuración</span>
+        </router-link>
       </nav>
       <div class="sidebar-footer">
         <div class="user-info">
