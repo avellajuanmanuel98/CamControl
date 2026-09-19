@@ -27,6 +27,10 @@ async function start() {
       width: 720,
       height: 405,
       template: "standard",
+      // Serve the decoder locally (see scripts/copy-ezuikit-static.mjs)
+      // instead of relying on EZVIZ's remote CDN, which can fail silently
+      // on some networks and leave the player stuck on a black frame.
+      staticPath: "/ezuikit_static",
       handleError: (err: { type?: string; data?: { nErrorCode?: number } }) => {
         if (err?.type === "handleRunTimeInfoError" && err?.data?.nErrorCode === 5) {
           error.value = "Código de verificación (cifrado) incorrecto o faltante para esta cámara.";

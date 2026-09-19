@@ -6,6 +6,11 @@ dist/
 frontend/dist/
 backend/dist/
 
+# EZUIKit decoder assets, copied from node_modules by postinstall (see
+# frontend/scripts/copy-ezuikit-static.mjs) so the live-view player doesn't
+# depend on EZVIZ's remote CDN.
+frontend/public/ezuikit_static/
+
 # Env files (never commit secrets)
 .env
 .env.local
