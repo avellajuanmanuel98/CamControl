@@ -83,9 +83,14 @@ monitoringRouter.get(
       throw badRequest(message);
     }
 
+    // Default to SD ("live", not "hd.live"): a technician glancing at a
+    // wall of many cameras at once needs the account's shared bandwidth
+    // to stretch across all of them, not just one HD stream. The player
+    // exposes its own HD/SD toggle (template: "security") for zooming
+    // into one camera when that matters more than the wall staying up.
     res.json({
       accessToken,
-      url: `ezopen://open.ezviz.com/${camera.ezvizDeviceSerial}/1.hd.live`,
+      url: `ezopen://open.ezviz.com/${camera.ezvizDeviceSerial}/1.live`,
     });
   })
 );

@@ -35,7 +35,12 @@ async function start() {
       url: data.url,
       width: 720,
       height: 405,
-      template: "standard",
+      // "security" adds a built-in SD/HD toggle in the player controls —
+      // the stream starts in SD (see the /live endpoint) to go easy on
+      // the account's shared bandwidth across many cameras, and a
+      // technician can switch a single one to HD from the player itself
+      // when they need to look closer.
+      template: "security",
       // Serve the decoder locally (see scripts/copy-ezuikit-static.mjs)
       // instead of relying on EZVIZ's remote CDN, which can fail silently
       // on some networks and leave the player stuck on a black frame.
